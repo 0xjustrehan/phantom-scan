@@ -18,7 +18,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use clap::Parser;
 use colored::*;
@@ -255,19 +255,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!("───────────────────────────────────────────────────────────────────────────");
 
-    // 7. Setup Output Writer
+    // 7. Setup High-Throughput Realtime Streaming Output Writer (1MB Buffer + Low-Latency Flush)
     let (tx, mut rx) = mpsc::unbounded_channel::<ScanHit>();
     let out_file_path = args.output_file.clone();
     let is_json = args.json;
 
     let writer_handle = tokio::spawn(async move {
-        let mut file = match OpenOptions::new().create(true).append(true).open(&out_file_path) {
+        let file = match OpenOptions::new().create(true).append(true).open(&out_file_path) {
             Ok(f) => f,
             Err(e) => {
                 eprintln!("{} Failed to open output file: {}", "[!]".red().bold(), e);
                 return;
             }
         };
+
+        let mut writer = std::io::BufWriter::with_capacity(1024 * 1024, file);
+        let mut last_flush = Instant::now();
+        let mut unwritten_count = 0u64;
 
         while let Some(hit) = rx.recv().await {
             if is_json {
@@ -277,16 +281,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "banner": hit.banner,
                     "timestamp": hit.timestamp.to_rfc3339()
                 })).unwrap();
-                let _ = writeln!(file, "{}", json_line);
+                let _ = writeln!(writer, "{}", json_line);
             } else {
                 if let Some(ref b) = hit.banner {
-                    let _ = writeln!(file, "{}:{} [{}]", hit.ip, hit.port, b);
+                    let _ = writeln!(writer, "{}:{} [{}]", hit.ip, hit.port, b);
                 } else {
-                    let _ = writeln!(file, "{}:{}", hit.ip, hit.port);
+                    let _ = writeln!(writer, "{}:{}", hit.ip, hit.port);
                 }
             }
-            let _ = file.flush();
+            unwritten_count += 1;
+
+            // Realtime streaming flush: flushes whenever queue drains or every 256 hits / 100ms
+            if unwritten_count >= 256 || last_flush.elapsed() >= Duration::from_millis(100) || rx.is_empty() {
+                let _ = writer.flush();
+                last_flush = Instant::now();
+                unwritten_count = 0;
+            }
         }
+        let _ = writer.flush();
     });
 
     let start_time = Instant::now();

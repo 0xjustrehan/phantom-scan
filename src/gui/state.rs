@@ -193,19 +193,28 @@ impl AppState {
         if let Some(ref rx) = self.hit_rx {
             let mut new_hits = 0;
             while let Ok(hit) = rx.try_recv() {
+                self.metrics.hits_count += 1;
                 self.results.push(hit);
                 new_hits += 1;
             }
             if new_hits > 0 {
-                self.metrics.hits_count = self.results.len() as u64;
+                // Keep rolling window of latest 50,000 hits in GUI memory to prevent RAM exhaustion & maintain 60 FPS
+                if self.results.len() > 50_000 {
+                    let excess = self.results.len() - 50_000;
+                    self.results.drain(0..excess);
+                }
                 self.update_filter();
             }
         }
 
-        // Drain logs
+        // Drain logs (bounded to last 5,000 lines to avoid RAM bloat)
         if let Some(ref rx) = self.log_rx {
             while let Ok(line) = rx.try_recv() {
                 self.logs.push(line);
+            }
+            if self.logs.len() > 5_000 {
+                let excess = self.logs.len() - 5_000;
+                self.logs.drain(0..excess);
             }
         }
 
@@ -425,11 +434,18 @@ impl AppState {
             let write_jsonl = cfg.jsonl;
 
             thread::spawn(move || {
-                let mut out_file = if !output_file_path.trim().is_empty() {
-                    OpenOptions::new().create(true).append(true).open(&output_file_path).ok()
+                let mut out_writer = if !output_file_path.trim().is_empty() {
+                    OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(&output_file_path)
+                        .ok()
+                        .map(|f| std::io::BufWriter::with_capacity(1024 * 1024, f))
                 } else {
                     None
                 };
+                let mut last_flush = Instant::now();
+                let mut unwritten_hits = 0u64;
 
                 while let Some(hit) = tokio_rx.blocking_recv() {
                     let banner_str = hit.banner.as_deref().unwrap_or("OPEN");
@@ -439,8 +455,8 @@ impl AppState {
                         text: format!("OPEN {}:{} [{}]", hit.ip, hit.port, banner_str),
                     });
 
-                    // Write to output file if configured
-                    if let Some(ref mut f) = out_file {
+                    // Write to output file if configured (1MB buffered wire-speed + realtime streaming flush)
+                    if let Some(ref mut w) = out_writer {
                         if write_jsonl {
                             let json = serde_json::json!({
                                 "ip": hit.ip.to_string(),
@@ -448,17 +464,26 @@ impl AppState {
                                 "banner": hit.banner,
                                 "timestamp": hit.timestamp.to_rfc3339()
                             });
-                            let _ = writeln!(f, "{}", json);
+                            let _ = writeln!(w, "{}", json);
                         } else {
                             if let Some(ref b) = hit.banner {
-                                let _ = writeln!(f, "{}:{} [{}]", hit.ip, hit.port, b);
+                                let _ = writeln!(w, "{}:{} [{}]", hit.ip, hit.port, b);
                             } else {
-                                let _ = writeln!(f, "{}:{}", hit.ip, hit.port);
+                                let _ = writeln!(w, "{}:{}", hit.ip, hit.port);
                             }
+                        }
+                        unwritten_hits += 1;
+                        if unwritten_hits >= 256 || last_flush.elapsed() >= Duration::from_millis(100) || tokio_rx.is_empty() {
+                            let _ = w.flush();
+                            last_flush = Instant::now();
+                            unwritten_hits = 0;
                         }
                     }
 
                     let _ = hit_tx_clone.send(hit);
+                }
+                if let Some(ref mut w) = out_writer {
+                    let _ = w.flush();
                 }
             });
 

@@ -45,6 +45,16 @@ impl TargetSpace {
                 continue;
             }
 
+            // Global aliases: whole IPv4 Internet
+            if clean.eq_ignore_ascii_case("world")
+                || clean.eq_ignore_ascii_case("internet")
+                || clean.eq_ignore_ascii_case("global")
+                || clean == "0/0"
+            {
+                v4_ranges.push((0, 1u64 << 32));
+                continue;
+            }
+
             if clean.contains(':') {
                 // IPv6 target
                 if clean.contains('/') {
@@ -207,6 +217,9 @@ pub fn parse_ports(port_str: &str) -> Result<Vec<u16>, String> {
     if clean == "common" || clean == "top" {
         return Ok(vec![80, 443, 8080, 8443, 22, 21, 25, 3389, 445, 110, 993, 995, 1433, 3306, 5432, 6379, 27017]);
     }
+    if clean == "all" || clean == "1-65535" || clean == "0-65535" {
+        return Ok((1..=65535).collect());
+    }
     if clean == "rdp" {
         return Ok(vec![3389]);
     }
@@ -231,6 +244,7 @@ pub fn parse_ports(port_str: &str) -> Result<Vec<u16>, String> {
             if bounds.len() == 2 {
                 let start: u16 = bounds[0].trim().parse().map_err(|e| format!("Invalid port: {}", e))?;
                 let end: u16 = bounds[1].trim().parse().map_err(|e| format!("Invalid port: {}", e))?;
+                let start = start.max(1);
                 if start <= end {
                     for p in start..=end {
                         ports.push(p);
@@ -249,5 +263,38 @@ pub fn parse_ports(port_str: &str) -> Result<Vec<u16>, String> {
         Err("No valid ports parsed".to_string())
     } else {
         Ok(ports)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_world_target_parsing() {
+        let ts = TargetSpace::new(&["world".to_string()], vec![80]).unwrap();
+        assert_eq!(ts.total_ips, 4_294_967_296);
+        assert_eq!(ts.total_targets, 4_294_967_296);
+
+        let ts2 = TargetSpace::new(&["0.0.0.0/0".to_string()], vec![80]).unwrap();
+        assert_eq!(ts2.total_ips, 4_294_967_296);
+
+        let ts3 = TargetSpace::new(&["internet".to_string()], vec![80]).unwrap();
+        assert_eq!(ts3.total_ips, 4_294_967_296);
+    }
+
+    #[test]
+    fn test_all_ports_parsing() {
+        let ports = parse_ports("all").unwrap();
+        assert_eq!(ports.len(), 65535);
+        assert_eq!(ports[0], 1);
+        assert_eq!(ports[65534], 65535);
+
+        let ports2 = parse_ports("0-65535").unwrap();
+        assert_eq!(ports2.len(), 65535);
+        assert_eq!(ports2[0], 1);
+
+        let ports3 = parse_ports("1-65535").unwrap();
+        assert_eq!(ports3.len(), 65535);
     }
 }
