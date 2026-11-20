@@ -91,15 +91,3 @@ phantom-scan -f subnets.txt -p rdp,ssh,web -b -r 25000 -o live_services.txt
 # 7. Output in JSON Lines with timestamps & service banners
 phantom-scan -f targets.txt -p 3389 -b --json -o results.jsonl
 ```
-
----
-
-## 🔗 RDP-Spray Integration Pipeline
-
-```bash
-# Step 1: Scan without getting blacklisted, extracting NLA / TLS capabilities
-phantom-scan -f subnets.txt -p 3389 -b -r 50000 --cooldown-ms 2500 -o live_rdp.txt
-
-# Step 2: Feed discovered live RDP targets directly into rdp-spray
-rdp-spray -f live_rdp.txt -U user.txt -P pass.txt -t 500
-```
