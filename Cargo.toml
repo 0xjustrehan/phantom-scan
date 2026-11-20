@@ -1,0 +1,75 @@
+[package]
+name = "phantom-scan"
+version = "0.3.0"
+edition = "2021"
+description = "Next-gen ultra-high-speed network scanner in Rust with Anti-AbuseIPDB and OS fingerprint evasion"
+
+[[bin]]
+name = "phantom-scan"
+path = "src/main.rs"
+
+[dependencies]
+# Async Runtime & Concurrency
+tokio = { version = "1", features = ["full"] }
+crossbeam-channel = "0.5"
+parking_lot = "0.12"
+num_cpus = "1"
+
+# CLI & Terminal UI
+clap = { version = "4", features = ["derive"] }
+indicatif = { version = "0.17", features = ["rayon"] }
+colored = "2"
+
+# Crypto & Hashing
+blake3 = "1"
+fastrand = "2"
+
+# HTTP Client for Threat Feeds
+reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
+flate2 = "1.0"
+
+# Networking & Packet Crafting
+socket2 = { version = "0.5", features = ["all"] }
+ipnet = "2.9"
+
+# Serialization & Logging
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = "0.4"
+toml = "0.8"
+
+# Desktop GUI (Operator-oriented dark frontend)
+eframe = { version = "0.29", default-features = false, features = ["default_fonts", "glow"] }
+egui = "0.29"
+egui_extras = "0.29"
+egui_plot = "0.29"
+rfd = "0.15"
+webbrowser = "1.0"
+
+# Memory allocator for maximum throughput
+mimalloc = { version = "0.1", default-features = false }
+arboard = "3.7.0"
+
+[features]
+default = ["portable"]
+portable = []
+bpf = []
+full = ["portable", "bpf"]
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Networking_WinSock",
+    "Win32_System_Threading",
+    "Win32_System_Console"
+] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true

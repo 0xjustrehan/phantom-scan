@@ -1,0 +1,12 @@
+/target
+.cargo/
+releases/
+phantom-scan
+phantom-scan.exe
+*.exe
+*.rar
+*.zip
+*.tar.gz
+*.txt
+!CMakeLists.txt
+.user_uploaded/
