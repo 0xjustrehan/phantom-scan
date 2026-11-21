@@ -61,7 +61,7 @@ const TPACKET_V2_VAL: libc::c_int = 1;
 const TPACKET_V3_VAL: libc::c_int = 2;
 
 #[cfg(target_os = "linux")]
-const TPACKET2_HDRLEN: usize = 32 + 20; // sizeof(tpacket2_hdr) aligned + sizeof(sockaddr_ll)
+const TPACKET2_TX_OFFSET: usize = 32; // TPACKET_ALIGN(sizeof(struct tpacket2_hdr)) = 32. Kernel reads frame payload from here!
 #[cfg(target_os = "linux")]
 const TP_STATUS_KERNEL: u32 = 0;
 #[cfg(target_os = "linux")]
@@ -272,14 +272,22 @@ impl LinuxAfPacketEngine {
                     idle_spins = 0;
                     let snaplen = unsafe { (*header).tp_snaplen } as usize;
                     let mac_offset = unsafe { (*header).tp_mac } as usize;
+                    let net_offset = unsafe { (*header).tp_net } as usize;
 
-                    if snaplen >= 14 {
+                    let ip_slice = if net_offset > 0 && net_offset >= mac_offset && snaplen > (net_offset - mac_offset) {
+                        let ip_len = snaplen - (net_offset - mac_offset);
+                        unsafe { std::slice::from_raw_parts(frame_ptr.add(net_offset), ip_len) }
+                    } else if snaplen >= 14 {
                         let packet_data = unsafe {
                             std::slice::from_raw_parts(frame_ptr.add(mac_offset), snaplen)
                         };
+                        &packet_data[14..]
+                    } else {
+                        &[]
+                    };
 
-                        // Strip 14-byte Ethernet header to get IP frame
-                        if let Some(resp) = PacketParser::parse_ip_packet(&packet_data[14..]) {
+                    if !ip_slice.is_empty() {
+                        if let Some(resp) = PacketParser::parse_ip_packet(ip_slice) {
                             let is_our_ip = Some(resp.dst_ip) == src_v4_match || Some(resp.dst_ip) == src_v6_match;
                             if is_our_ip && resp.is_syn_ack {
                                 if cookie_rx.verify_ack(resp.dst_ip, resp.src_ip, resp.dst_port, resp.src_port, resp.ack_num) {
@@ -485,7 +493,7 @@ impl LinuxAfPacketEngine {
                             thread::sleep(Duration::from_micros(10));
                         }
 
-                        let payload_ptr = unsafe { frame_ptr.add(TPACKET2_HDRLEN) };
+                        let payload_ptr = unsafe { frame_ptr.add(TPACKET2_TX_OFFSET) };
                         let payload_buf = unsafe { std::slice::from_raw_parts_mut(payload_ptr, 256) };
 
                         // 14-byte Ethernet Header
@@ -655,7 +663,7 @@ impl LinuxAfPacketEngine {
                                 thread::sleep(Duration::from_micros(10));
                             }
 
-                            let payload_ptr = unsafe { frame_ptr.add(TPACKET2_HDRLEN) };
+                            let payload_ptr = unsafe { frame_ptr.add(TPACKET2_TX_OFFSET) };
                             let payload_buf = unsafe { std::slice::from_raw_parts_mut(payload_ptr, 256) };
 
                             payload_buf[0..6].copy_from_slice(&l2_info.gateway_mac);
