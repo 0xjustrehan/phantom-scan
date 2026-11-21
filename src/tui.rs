@@ -216,7 +216,11 @@ pub async fn run_interactive_wizard(default_args: Cli) -> Result<Cli, Box<dyn st
     println!("  Rate:         {:.2}-kpps ({} pps)", (args.rate as f64) / 1000.0, args.rate.to_string().yellow().bold());
     println!("  Banner:       {}", if args.banner { "ENABLED".green().bold() } else { "DISABLED".bright_black() });
     println!("  Profile:      {:?}", args.profile);
-    println!("  Cooldown:     {} ms", args.cooldown_ms);
+    if args.cooldown_ms == 0 {
+        println!("  Cooldown:     {}", "DISABLED (Unrestricted line-rate like masscan)".yellow().bold());
+    } else {
+        println!("  Cooldown:     {} ms", args.cooldown_ms);
+    }
     println!("  Output File:  {}", args.output_file.yellow());
     println!("{}", "═══════════════════════════════════════════════════════════════════════════".bright_black());
 

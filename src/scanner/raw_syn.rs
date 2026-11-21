@@ -263,9 +263,11 @@ impl RawSynScanner {
                 )
             };
 
+            let mut idle_spins = 0u32;
             while !rx_stop_clone.load(Ordering::Relaxed) {
                 match rx_socket.recv(uninit_buf) {
                     Ok(len) if len > 0 => {
+                        idle_spins = 0;
                         if let Some(resp) = PacketParser::parse_ip_packet(&buf[..len]) {
                             let is_our_ip = Some(resp.dst_ip) == src_v4 || Some(resp.dst_ip) == src_v6;
                             if is_our_ip && resp.is_syn_ack {
@@ -301,7 +303,14 @@ impl RawSynScanner {
                         }
                     }
                     Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                        thread::sleep(Duration::from_micros(80));
+                        idle_spins += 1;
+                        if idle_spins < 100 {
+                            std::hint::spin_loop();
+                        } else if idle_spins < 1000 {
+                            thread::yield_now();
+                        } else {
+                            thread::sleep(Duration::from_micros(20));
+                        }
                     }
                     Err(_) => {
                         thread::sleep(Duration::from_micros(200));

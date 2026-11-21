@@ -36,7 +36,7 @@ if [ "$1" == "--musl" ] || [ "$MUSL" == "1" ]; then
         rustup target add $TARGET
     fi
 
-    export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_RUSTFLAGS="-C target-feature=+crt-static -C opt-level=3"
+    export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_RUSTFLAGS="--remap-path-prefix $HOME=/home/anon --remap-path-prefix $(pwd)=/build -C target-feature=+crt-static -C opt-level=3 -C link-arg=-s"
     cargo build --release --target $TARGET
 
     echo ""

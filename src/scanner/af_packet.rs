@@ -261,6 +261,7 @@ impl LinuxAfPacketEngine {
         let rx_handle = thread::spawn(move || {
             let mut rx_idx = 0usize;
             let rx_raw = rx_ring_addr as *mut u8;
+            let mut idle_spins = 0u32;
 
             while !rx_stop_clone.load(Ordering::Relaxed) {
                 let frame_ptr = unsafe { rx_raw.add(rx_idx * (rx_frame_size as usize)) };
@@ -268,6 +269,7 @@ impl LinuxAfPacketEngine {
 
                 let status = unsafe { (*header).tp_status };
                 if (status & TP_STATUS_USER) != 0 {
+                    idle_spins = 0;
                     let snaplen = unsafe { (*header).tp_snaplen } as usize;
                     let mac_offset = unsafe { (*header).tp_mac } as usize;
 
@@ -317,7 +319,14 @@ impl LinuxAfPacketEngine {
                     unsafe { (*header).tp_status = TP_STATUS_KERNEL };
                     rx_idx = (rx_idx + 1) % (rx_frame_nr as usize);
                 } else {
-                    thread::sleep(Duration::from_micros(30));
+                    idle_spins += 1;
+                    if idle_spins < 100 {
+                        std::hint::spin_loop();
+                    } else if idle_spins < 1000 {
+                        thread::yield_now();
+                    } else {
+                        thread::sleep(Duration::from_micros(10));
+                    }
                 }
             }
         });

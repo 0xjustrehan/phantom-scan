@@ -1,6 +1,6 @@
 [package]
 name = "phantom-scan"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 description = "Next-gen ultra-high-speed network scanner in Rust with Anti-AbuseIPDB and OS fingerprint evasion"
 
@@ -25,7 +25,8 @@ blake3 = "1"
 fastrand = "2"
 
 # HTTP Client for Threat Feeds
-reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 flate2 = "1.0"
 
 # Networking & Packet Crafting

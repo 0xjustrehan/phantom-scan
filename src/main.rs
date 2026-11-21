@@ -64,6 +64,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let _ = AttachConsole(ATTACH_PARENT_PROCESS);
     }
 
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     let mut args = Cli::parse();
 
     let _raw_args: Vec<String> = std::env::args().collect();
@@ -152,8 +154,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    // 1. Auto-refresh stale threat feeds on startup unless disabled
-    if !args.no_auto_feeds && FeedManager::is_cache_stale() {
+    // 1. Auto-refresh stale threat feeds on startup if enabled
+    if args.threat_feeds && !args.no_auto_feeds && FeedManager::is_cache_stale() {
         FeedManager::auto_refresh_if_stale().await;
     }
 
@@ -192,12 +194,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 4. Build Blacklist Trie
     let mut blacklist = build_default_blacklist(args.scan_private);
-    let cached_feeds_count = FeedManager::load_cached_feeds(&mut blacklist);
-    if cached_feeds_count > 0 {
-        println!("{} Loaded {} threat intelligence & honeypot subnets from cache", 
-            "[*]".cyan(), 
-            cached_feeds_count.to_string().yellow().bold()
-        );
+    if args.threat_feeds {
+        let cached_feeds_count = FeedManager::load_cached_feeds(&mut blacklist);
+        if cached_feeds_count > 0 {
+            println!("{} Loaded {} threat intelligence & honeypot subnets from cache", 
+                "[*]".cyan(), 
+                cached_feeds_count.to_string().yellow().bold()
+            );
+        }
     }
 
     if let Some(ref ex_file) = args.exclude_file {
@@ -236,10 +240,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         (args.rate as f64) / 1000.0,
         args.rate.to_string().cyan().bold()
     );
-    println!("{} Anti-Abuse Cooldown: {}ms per /24 (IPv4) & /64 (IPv6)", 
-        "[*]".green().bold(), 
-        args.cooldown_ms.to_string().cyan().bold()
-    );
+    if args.cooldown_ms == 0 {
+        println!("{} Anti-Abuse Cooldown: {}", 
+            "[*]".green().bold(), 
+            "DISABLED (Unrestricted wire-speed like masscan)".yellow().bold()
+        );
+    } else {
+        println!("{} Anti-Abuse Cooldown: {}ms per /24 (IPv4) & /64 (IPv6)", 
+            "[*]".green().bold(), 
+            args.cooldown_ms.to_string().cyan().bold()
+        );
+    }
     println!("{} Stack Fingerprint Profile: {:?} (Randomize: {})", 
         "[*]".green().bold(), 
         args.profile,

@@ -44,8 +44,8 @@ pub struct Cli {
     #[arg(short = 'm', long = "mode", default_value = "stealth-async")]
     pub mode: String,
 
-    /// Anti-AbuseIPDB cooldown per /24 subnet in milliseconds (prevents honeypot/firewall triggers)
-    #[arg(short = 'c', long = "cooldown-ms", default_value = "2500")]
+    /// Anti-AbuseIPDB cooldown per /24 subnet in milliseconds (0 = disabled, standard line-rate like masscan)
+    #[arg(short = 'c', long = "cooldown-ms", default_value = "0")]
     pub cooldown_ms: u32,
 
     /// Use compact 4MB cooldown table instead of exact 64MB dense table
@@ -135,6 +135,10 @@ pub struct Cli {
     /// AF_PACKET fanout load-balancing mode: 'lb', 'hash', 'cpu', 'rollover'
     #[arg(long = "fanout-mode", default_value = "lb")]
     pub fanout_mode: String,
+
+    /// Enable threat intelligence & honeypot feed exclusion (Spamhaus, FireHOL, Blocklist.de)
+    #[arg(long = "threat-feeds")]
+    pub threat_feeds: bool,
 
     /// Download and update threat intelligence feeds (Spamhaus DROP, AbuseIPDB, GreyNoise) and exit
     #[arg(long = "update-feeds")]

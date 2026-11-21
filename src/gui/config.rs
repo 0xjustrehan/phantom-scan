@@ -82,7 +82,7 @@ impl Default for GuiConfig {
             randomize_stack: true,
             source_port: 54321,
             source_port_range: "40000-65000".to_string(),
-            cooldown_ms: 2500,
+            cooldown_ms: 0,
             compact_cooldown: false,
 
             source_ip: "".to_string(),
@@ -156,7 +156,7 @@ impl GuiConfig {
         parts.push(format!("-r {}", self.rate));
         parts.push(format!("-m {}", self.mode));
 
-        if self.cooldown_ms != 2500 {
+        if self.cooldown_ms > 0 {
             parts.push(format!("--cooldown-ms {}", self.cooldown_ms));
         }
 
