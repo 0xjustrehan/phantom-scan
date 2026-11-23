@@ -1,6 +1,7 @@
 /target
 .cargo/
 releases/
+dist/
 phantom-scan
 phantom-scan.exe
 *.exe

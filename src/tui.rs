@@ -106,20 +106,30 @@ pub async fn run_interactive_wizard(default_args: Cli) -> Result<Cli, Box<dyn st
     // ──────────────────────────────────────────────────────────────────────────
     println!("\n{}", "[STEP 2/7] Port Selection".green().bold());
     println!("  [1] RDP (3389)");
-    println!("  [2] SSH (22)");
-    println!("  [3] Web HTTP/HTTPS (80,443)");
-    println!("  [4] SMB (445)");
-    println!("  [5] Top 17 Common (21,22,23,25,80,110,139,443,445,1433,3306,3389,5432,5900,6379,8080,8443)");
-    println!("  [6] Custom Port List / Range");
+    println!("  [2] Quick RDP NLA (3389, Grab Banner + NLA/CredSSP Only + Bare IP:PORT)");
+    println!("  [3] Quick SSH (22, Bare IP:PORT)");
+    println!("  [4] Web HTTP/HTTPS (80,443)");
+    println!("  [5] SMB (445)");
+    println!("  [6] Top 17 Common (21,22,23,25,80,110,139,443,445,1433,3306,3389,5432,5900,6379,8080,8443)");
+    println!("  [7] Custom Port List / Range");
 
-    let port_choice = prompt_line("Select ports preset (1-6)", Some("1"));
+    let port_choice = prompt_line("Select ports preset (1-7)", Some("1"));
     match port_choice.as_str() {
         "1" => args.ports = "3389".to_string(),
-        "2" => args.ports = "22".to_string(),
-        "3" => args.ports = "80,443".to_string(),
-        "4" => args.ports = "445".to_string(),
-        "5" => args.ports = "common".to_string(),
-        "6" => {
+        "2" => {
+            args.ports = "3389".to_string();
+            args.banner = true;
+            args.nla_only = true;
+            args.bare = true;
+        }
+        "3" => {
+            args.ports = "22".to_string();
+            args.bare = true;
+        }
+        "4" => args.ports = "80,443".to_string(),
+        "5" => args.ports = "445".to_string(),
+        "6" => args.ports = "common".to_string(),
+        "7" => {
             let custom_ports = prompt_line("Enter port list (e.g. '1-1024' or '80,8080,3389')", Some("3389"));
             args.ports = custom_ports;
         }
@@ -170,8 +180,12 @@ pub async fn run_interactive_wizard(default_args: Cli) -> Result<Cli, Box<dyn st
     // Step 5: Banner Grabbing
     // ──────────────────────────────────────────────────────────────────────────
     println!("\n{}", "[STEP 5/7] Banner Grabbing".green().bold());
-    let banner_input = prompt_line("Inspect & grab service banners on SYN-ACK? (y/n)", Some(if args.banner { "y" } else { "y" }));
+    let banner_default = if args.banner { "y" } else { "n" };
+    let banner_input = prompt_line("Inspect & grab service banners on SYN-ACK? (y/n)", Some(banner_default));
     args.banner = banner_input.to_lowercase().starts_with('y');
+    if args.nla_only {
+        args.banner = true;
+    }
 
     // ──────────────────────────────────────────────────────────────────────────
     // Step 6: OS Camouflage Profile
@@ -194,11 +208,15 @@ pub async fn run_interactive_wizard(default_args: Cli) -> Result<Cli, Box<dyn st
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Step 7: Output & Cooldown
+    // Step 7: Output & Formatting
     // ──────────────────────────────────────────────────────────────────────────
-    println!("\n{}", "[STEP 7/7] Output & Anti-Abuse Configuration".green().bold());
+    println!("\n{}", "[STEP 7/7] Output & Formatting".green().bold());
     let out_input = prompt_line("Output result file path", Some(&args.output_file));
     args.output_file = out_input;
+
+    let bare_default = if args.bare { "y" } else { "n" };
+    let bare_input = prompt_line("Save strictly as clean IP:PORT (no banner annotations)? (y/n)", Some(bare_default));
+    args.bare = bare_input.to_lowercase().starts_with('y');
 
     let cooldown_input = prompt_line("Subnet anti-abuse cooldown in ms (0 = disabled)", Some(&args.cooldown_ms.to_string()));
     if let Ok(cd) = cooldown_input.parse::<u32>() {
@@ -215,6 +233,12 @@ pub async fn run_interactive_wizard(default_args: Cli) -> Result<Cli, Box<dyn st
     println!("  Engine:       {}", args.mode.to_uppercase().bright_magenta().bold());
     println!("  Rate:         {:.2}-kpps ({} pps)", (args.rate as f64) / 1000.0, args.rate.to_string().yellow().bold());
     println!("  Banner:       {}", if args.banner { "ENABLED".green().bold() } else { "DISABLED".bright_black() });
+    if args.nla_only {
+        println!("  NLA Filter:   {}", "ENABLED (Strictly save verified CredSSP targets)".bright_cyan().bold());
+    }
+    if args.bare {
+        println!("  Output Form:  {}", "Clean IP:PORT (one per line)".bright_yellow().bold());
+    }
     println!("  Profile:      {:?}", args.profile);
     if args.cooldown_ms == 0 {
         println!("  Cooldown:     {}", "DISABLED (Unrestricted line-rate like masscan)".yellow().bold());

@@ -220,7 +220,7 @@ pub fn parse_ports(port_str: &str) -> Result<Vec<u16>, String> {
     if clean == "all" || clean == "1-65535" || clean == "0-65535" {
         return Ok((1..=65535).collect());
     }
-    if clean == "rdp" {
+    if clean == "rdp" || clean == "nla" {
         return Ok(vec![3389]);
     }
     if clean == "ssh" {

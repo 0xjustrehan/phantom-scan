@@ -32,7 +32,7 @@ pub struct Cli {
     #[arg(short = 'i', long = "tui")]
     pub tui: bool,
 
-    /// Target ports: '3389', '80,443', '1-1024', 'common', 'rdp', 'ssh'
+    /// Target ports: '3389', '80,443', '1-1024', 'common', 'rdp', 'ssh', 'nla'
     #[arg(short = 'p', long = "ports", default_value = "3389")]
     pub ports: String,
 
@@ -71,6 +71,22 @@ pub struct Cli {
     /// Output results as JSON Lines format with timestamps and service banners
     #[arg(long = "json")]
     pub json: bool,
+
+    /// Filter & save only RDP targets with confirmed NLA / CredSSP support
+    #[arg(long = "nla-only", aliases = ["only-nla"])]
+    pub nla_only: bool,
+
+    /// Output format: save strictly as clean IP:PORT (one per line, without banner annotations)
+    #[arg(long = "bare", aliases = ["ip-port", "clean"])]
+    pub bare: bool,
+
+    /// Quick NLA scan preset: port 3389, grab banner, filter NLA/CredSSP only, save as IP:PORT
+    #[arg(long = "quick-nla")]
+    pub quick_nla: bool,
+
+    /// Quick SSH scan preset: port 22, save as IP:PORT
+    #[arg(long = "quick-ssh")]
+    pub quick_ssh: bool,
 
     /// File containing CIDR prefixes to exclude from scanning
     #[arg(long = "exclude-file")]

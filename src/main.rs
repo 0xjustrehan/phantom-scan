@@ -68,6 +68,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut args = Cli::parse();
 
+    // Handle Quick Presets
+    if args.quick_nla {
+        args.ports = "3389".to_string();
+        args.banner = true;
+        args.nla_only = true;
+        args.bare = true;
+    }
+
+    if args.quick_ssh {
+        args.ports = "22".to_string();
+        args.bare = true;
+    }
+
+    if args.ports.eq_ignore_ascii_case("nla") {
+        args.ports = "3389".to_string();
+        args.banner = true;
+        args.nla_only = true;
+        args.bare = true;
+    }
+
+    if args.nla_only {
+        args.banner = true;
+    }
+
     let _raw_args: Vec<String> = std::env::args().collect();
     let has_scan_target = args.target.is_some() || args.targets_file.is_some() || args.country.is_some() || args.update_feeds || args.update_geo;
 
@@ -260,6 +284,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "[*]".green().bold(), 
         if args.banner { "ENABLED (Bounded Pool)".bright_green().bold() } else { "DISABLED".yellow() }
     );
+    if args.nla_only {
+        println!("{} NLA / CredSSP Filter: {}", 
+            "[*]".green().bold(), 
+            "ENABLED (Strictly save verified NLA targets)".bright_cyan().bold()
+        );
+    }
+    if args.bare {
+        println!("{} Output Format: {}", 
+            "[*]".green().bold(), 
+            "Bare IP:PORT (clean output ready for spraying/pipelines)".bright_yellow().bold()
+        );
+    }
     println!("{} Engine Mode: {}", 
         "[*]".green().bold(), 
         args.mode.to_uppercase().bright_magenta().bold()
@@ -270,6 +306,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (tx, mut rx) = mpsc::unbounded_channel::<ScanHit>();
     let out_file_path = args.output_file.clone();
     let is_json = args.json;
+    let nla_only = args.nla_only;
+    let bare_mode = args.bare;
 
     let writer_handle = tokio::spawn(async move {
         let file = match OpenOptions::new().create(true).append(true).open(&out_file_path) {
@@ -285,6 +323,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut unwritten_count = 0u64;
 
         while let Some(hit) = rx.recv().await {
+            // If NLA filter is active, only save targets with confirmed NLA / CredSSP capability
+            if nla_only {
+                let is_nla = crate::banner::BannerGrabber::is_nla_capable(hit.banner.as_deref());
+                if !is_nla {
+                    continue;
+                }
+            }
+
             if is_json {
                 let json_line = serde_json::to_string(&serde_json::json!({
                     "ip": hit.ip.to_string(),
@@ -293,6 +339,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "timestamp": hit.timestamp.to_rfc3339()
                 })).unwrap();
                 let _ = writeln!(writer, "{}", json_line);
+            } else if bare_mode {
+                let _ = writeln!(writer, "{}:{}", hit.ip, hit.port);
             } else {
                 if let Some(ref b) = hit.banner {
                     let _ = writeln!(writer, "{}:{} [{}]", hit.ip, hit.port, b);

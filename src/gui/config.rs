@@ -19,6 +19,8 @@ pub struct GuiConfig {
     pub scan_private: bool,
     pub v6_samples: usize,
     pub banner: bool,
+    pub nla_only: bool,
+    pub bare: bool,
     pub jsonl: bool,
     pub output_file: String,
 
@@ -69,6 +71,8 @@ impl Default for GuiConfig {
             scan_private: true,
             v6_samples: 256,
             banner: true,
+            nla_only: false,
+            bare: false,
             jsonl: false,
             output_file: "open_targets.txt".to_string(),
 
@@ -174,6 +178,14 @@ impl GuiConfig {
 
         if self.banner {
             parts.push("-b".to_string());
+        }
+
+        if self.nla_only {
+            parts.push("--nla-only".to_string());
+        }
+
+        if self.bare {
+            parts.push("--bare".to_string());
         }
 
         if self.scan_private {

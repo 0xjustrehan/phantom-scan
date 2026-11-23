@@ -432,6 +432,8 @@ impl AppState {
             let log_tx_clone = log_tx.clone();
             let output_file_path = cfg.output_file.clone();
             let write_jsonl = cfg.jsonl;
+            let nla_only = cfg.nla_only;
+            let bare_mode = cfg.bare;
 
             thread::spawn(move || {
                 let mut out_writer = if !output_file_path.trim().is_empty() {
@@ -448,6 +450,13 @@ impl AppState {
                 let mut unwritten_hits = 0u64;
 
                 while let Some(hit) = tokio_rx.blocking_recv() {
+                    if nla_only {
+                        let is_nla = crate::banner::BannerGrabber::is_nla_capable(hit.banner.as_deref());
+                        if !is_nla {
+                            continue;
+                        }
+                    }
+
                     let banner_str = hit.banner.as_deref().unwrap_or("OPEN");
                     let _ = log_tx_clone.send(LogLine {
                         timestamp: Local::now(),
@@ -465,6 +474,8 @@ impl AppState {
                                 "timestamp": hit.timestamp.to_rfc3339()
                             });
                             let _ = writeln!(w, "{}", json);
+                        } else if bare_mode {
+                            let _ = writeln!(w, "{}:{}", hit.ip, hit.port);
                         } else {
                             if let Some(ref b) = hit.banner {
                                 let _ = writeln!(w, "{}:{} [{}]", hit.ip, hit.port, b);

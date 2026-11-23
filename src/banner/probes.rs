@@ -21,6 +21,15 @@ use tokio::time::timeout;
 pub struct BannerGrabber;
 
 impl BannerGrabber {
+    /// Check whether a service banner indicates confirmed NLA / CredSSP support
+    #[inline]
+    pub fn is_nla_capable(banner: Option<&str>) -> bool {
+        match banner {
+            Some(b) => b.contains("NLA") || b.contains("CredSSP") || b.contains("HYBRID"),
+            None => false,
+        }
+    }
+
     pub async fn grab_banner(target: SocketAddr, timeout_dur: Duration) -> Option<String> {
         let stream = timeout(timeout_dur, TcpStream::connect(target)).await.ok()?.ok()?;
         let (mut reader, mut writer) = stream.into_split();
@@ -35,7 +44,7 @@ impl BannerGrabber {
                     0x00, 0x00, 0x00, 0x00, 0x00,
                     // RDP Negotiation Request (RDP_NEG_REQ)
                     0x01, 0x00, 0x08, 0x00,
-                    0x03, 0x00, 0x00, 0x00, // PROTOCOL_SSL (0x01) | PROTOCOL_HYBRID / NLA (0x02)
+                    0x0b, 0x00, 0x00, 0x00, // PROTOCOL_SSL (0x01) | PROTOCOL_HYBRID / NLA (0x02) | PROTOCOL_HYBRID_EX (0x08)
                 ];
 
                 let _ = writer.write_all(&rdp_cr).await;
@@ -48,11 +57,22 @@ impl BannerGrabber {
                                 0x00 => "RDP [Standard RDP Encryption]",
                                 0x01 => "RDP [SSL/TLS]",
                                 0x02 => "RDP [NLA / CredSSP]",
-                                0x03 => "RDP [SSL + NLA]",
+                                0x03 => "RDP [SSL + NLA / CredSSP]",
                                 0x04 => "RDP [RDSTLS]",
+                                0x08 => "RDP [NLA / CredSSP Early-Auth]",
+                                0x0b => "RDP [SSL + NLA / CredSSP]",
+                                p if (p & 0x02) != 0 || (p & 0x08) != 0 => "RDP [NLA / CredSSP]",
                                 _ => "RDP",
                             };
                             return Some(desc.to_string());
+                        }
+                        if n >= 19 && buf[11] == 0x03 {
+                            let fail_code = u32::from_le_bytes([buf[15], buf[16], buf[17], buf[18]]);
+                            if fail_code == 0x05 {
+                                return Some("RDP [NLA / CredSSP Required by Server]".to_string());
+                            } else if fail_code == 0x01 {
+                                return Some("RDP [SSL Required by Server]".to_string());
+                            }
                         }
                         return Some("RDP [Standard]".to_string());
                     }

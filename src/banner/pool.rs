@@ -21,7 +21,7 @@ impl BannerPool {
         timeout_ms: u64,
         out_tx: mpsc::UnboundedSender<ScanHit>,
     ) -> (Self, tokio::task::JoinHandle<()>) {
-        let (tx, rx) = mpsc::channel::<ScanHit>(10_000);
+        let (tx, rx) = mpsc::channel::<ScanHit>(100_000);
         let rx = Arc::new(Mutex::new(rx));
         let timeout_dur = Duration::from_millis(timeout_ms);
 
