@@ -1,4 +1,4 @@
-use eframe::egui::{self, FontId, RichText, Ui, Vec2};
+use eframe::egui::{self, Color32, FontId, RichText, Ui, Vec2};
 use crate::gui::state::AppState;
 use crate::gui::theme::Theme;
 
@@ -64,7 +64,6 @@ impl LeftTargetsView {
             });
 
             // Preset buttons on NEXT line, full text, no truncation: [3389] [22] [80,443] [445] [common]
-            // Same height (19px), same padding, plain/monospace, not cut off
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing = Vec2::new(2.0, 0.0);
                 ui.spacing_mut().button_padding = Vec2::new(3.0, 1.5);
@@ -85,10 +84,25 @@ impl LeftTargetsView {
                         state.config.ports = val.to_string();
                     }
                 }
+            });
 
-                let quick_nla_btn = egui::Button::new(RichText::new("Quick NLA").font(font.clone()))
-                    .min_size(Vec2::new(0.0, 19.0));
-                if ui.add(quick_nla_btn).clicked() {
+            ui.add_space(2.0);
+
+            // One-Click Quick Presets: [⚡ Quick NLA] [⚡ Quick SSH]
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing = Vec2::new(3.0, 0.0);
+                ui.spacing_mut().button_padding = Vec2::new(4.0, 2.0);
+                let font = FontId::proportional(11.0);
+
+                let is_nla_active = state.config.ports == "3389" && state.config.nla_only && state.config.output_file == "NLA.txt";
+                let nla_btn = egui::Button::new(
+                    RichText::new("⚡ Quick NLA")
+                        .font(font.clone())
+                        .color(if is_nla_active { Color32::from_rgb(0, 255, 200) } else { Color32::WHITE }),
+                )
+                .min_size(Vec2::new(0.0, 20.0));
+
+                if ui.add(nla_btn).on_hover_text("Quick RDP NLA checker: scans 3389, verifies CredSSP/NLA, saves strictly to NLA.txt on hit").clicked() {
                     state.config.ports = "3389".to_string();
                     state.config.banner = true;
                     state.config.nla_only = true;
@@ -96,9 +110,15 @@ impl LeftTargetsView {
                     state.config.output_file = "NLA.txt".to_string();
                 }
 
-                let quick_ssh_btn = egui::Button::new(RichText::new("Quick SSH").font(font.clone()))
-                    .min_size(Vec2::new(0.0, 19.0));
-                if ui.add(quick_ssh_btn).clicked() {
+                let is_ssh_active = state.config.ports == "22" && state.config.output_file == "SSH.txt";
+                let ssh_btn = egui::Button::new(
+                    RichText::new("⚡ Quick SSH")
+                        .font(font.clone())
+                        .color(if is_ssh_active { Color32::from_rgb(0, 255, 200) } else { Color32::WHITE }),
+                )
+                .min_size(Vec2::new(0.0, 20.0));
+
+                if ui.add(ssh_btn).on_hover_text("Quick SSH port scanner: scans 22, saves clean IP:PORT strictly to SSH.txt on hit").clicked() {
                     state.config.ports = "22".to_string();
                     state.config.banner = false;
                     state.config.nla_only = false;

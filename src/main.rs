@@ -120,9 +120,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if should_launch_gui {
         if let Err(e) = crate::gui::run_gui() {
-            eprintln!("Failed to start GUI: {}", e);
+            eprintln!("{} Failed to initialize native GUI: {}", "[!]".red().bold(), e);
+            #[cfg(windows)]
+            unsafe {
+                use windows_sys::Win32::System::Console::AllocConsole;
+                let _ = AllocConsole();
+            }
+            eprintln!("{} Falling back to interactive Terminal UI (TUI)...", "[*]".yellow());
+            print_banner();
+            match crate::tui::run_interactive_wizard(args).await {
+                Ok(configured) => {
+                    args = configured;
+                }
+                Err(err) => {
+                    eprintln!("{} Interactive wizard aborted: {}", "[!]".red().bold(), err);
+                    std::process::exit(1);
+                }
+            }
+        } else {
+            return Ok(());
         }
-        return Ok(());
     }
 
     // Handle BGP Geo database update

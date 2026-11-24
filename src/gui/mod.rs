@@ -104,21 +104,50 @@ impl eframe::App for PhantomScanApp {
     }
 }
 
-/// Launch the desktop GUI
+/// Launch the desktop GUI with dual-engine fallback (WGPU/DirectX + Glow/OpenGL)
 pub fn run_gui() -> Result<(), eframe::Error> {
-    let native_options = eframe::NativeOptions {
+    #[cfg(windows)]
+    {
+        // On Windows: Primary renderer is WGPU (DirectX 12 / Direct3D 11 with built-in WARP software fallback)
+        // Works on all Windows editions (Windows Server, VMs, RDP sessions, and consumer Windows)
+        let wgpu_options = eframe::NativeOptions {
+            viewport: egui::ViewportBuilder::default()
+                .with_title("Phantom Scan")
+                .with_inner_size(Vec2::new(780.0, 480.0))
+                .with_min_inner_size(Vec2::new(600.0, 360.0))
+                .with_maximized(false)
+                .with_decorations(true),
+            renderer: eframe::Renderer::Wgpu,
+            ..Default::default()
+        };
+
+        match eframe::run_native(
+            "Phantom Scan",
+            wgpu_options,
+            Box::new(|cc| Ok(Box::new(PhantomScanApp::new(cc)))),
+        ) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                eprintln!("[!] WGPU/DirectX initialization failed ({}). Attempting OpenGL fallback...", e);
+            }
+        }
+    }
+
+    // Secondary / Linux renderer: Glow (OpenGL / EGL)
+    let glow_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Phantom Scan")
             .with_inner_size(Vec2::new(780.0, 480.0))
             .with_min_inner_size(Vec2::new(600.0, 360.0))
             .with_maximized(false)
             .with_decorations(true),
+        renderer: eframe::Renderer::Glow,
         ..Default::default()
     };
 
     eframe::run_native(
         "Phantom Scan",
-        native_options,
+        glow_options,
         Box::new(|cc| Ok(Box::new(PhantomScanApp::new(cc)))),
     )
 }
