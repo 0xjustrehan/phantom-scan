@@ -106,8 +106,8 @@ pub async fn run_interactive_wizard(default_args: Cli) -> Result<Cli, Box<dyn st
     // ──────────────────────────────────────────────────────────────────────────
     println!("\n{}", "[STEP 2/7] Port Selection".green().bold());
     println!("  [1] RDP (3389)");
-    println!("  [2] Quick RDP NLA (3389, Grab Banner + NLA/CredSSP Only + Bare IP:PORT)");
-    println!("  [3] Quick SSH (22, Bare IP:PORT)");
+    println!("  [2] Quick RDP NLA Checker (3389, Validates NLA/CredSSP -> Saves to NLA.txt)");
+    println!("  [3] Quick SSH Scanner (22 -> Saves to SSH.txt)");
     println!("  [4] Web HTTP/HTTPS (80,443)");
     println!("  [5] SMB (445)");
     println!("  [6] Top 17 Common (21,22,23,25,80,110,139,443,445,1433,3306,3389,5432,5900,6379,8080,8443)");
@@ -121,10 +121,12 @@ pub async fn run_interactive_wizard(default_args: Cli) -> Result<Cli, Box<dyn st
             args.banner = true;
             args.nla_only = true;
             args.bare = true;
+            args.output_file = "NLA.txt".to_string();
         }
         "3" => {
             args.ports = "22".to_string();
             args.bare = true;
+            args.output_file = "SSH.txt".to_string();
         }
         "4" => args.ports = "80,443".to_string(),
         "5" => args.ports = "445".to_string(),

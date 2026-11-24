@@ -93,6 +93,17 @@ impl LeftTargetsView {
                     state.config.banner = true;
                     state.config.nla_only = true;
                     state.config.bare = true;
+                    state.config.output_file = "NLA.txt".to_string();
+                }
+
+                let quick_ssh_btn = egui::Button::new(RichText::new("Quick SSH").font(font.clone()))
+                    .min_size(Vec2::new(0.0, 19.0));
+                if ui.add(quick_ssh_btn).clicked() {
+                    state.config.ports = "22".to_string();
+                    state.config.banner = false;
+                    state.config.nla_only = false;
+                    state.config.bare = true;
+                    state.config.output_file = "SSH.txt".to_string();
                 }
             });
 

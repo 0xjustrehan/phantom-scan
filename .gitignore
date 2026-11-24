@@ -2,6 +2,8 @@
 .cargo/
 releases/
 dist/
+gemini.md
+GEMINI.md
 phantom-scan
 phantom-scan.exe
 *.exe

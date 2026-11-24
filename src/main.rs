@@ -74,11 +74,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         args.banner = true;
         args.nla_only = true;
         args.bare = true;
+        if args.output_file == "open_targets.txt" {
+            args.output_file = "NLA.txt".to_string();
+        }
     }
 
     if args.quick_ssh {
         args.ports = "22".to_string();
         args.bare = true;
+        if args.output_file == "open_targets.txt" {
+            args.output_file = "SSH.txt".to_string();
+        }
     }
 
     if args.ports.eq_ignore_ascii_case("nla") {
@@ -86,6 +92,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         args.banner = true;
         args.nla_only = true;
         args.bare = true;
+        if args.output_file == "open_targets.txt" {
+            args.output_file = "NLA.txt".to_string();
+        }
+    }
+
+    if args.ports.eq_ignore_ascii_case("ssh") {
+        args.ports = "22".to_string();
+        args.bare = true;
+        if args.output_file == "open_targets.txt" {
+            args.output_file = "SSH.txt".to_string();
+        }
     }
 
     if args.nla_only {
@@ -296,13 +313,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "Bare IP:PORT (clean output ready for spraying/pipelines)".bright_yellow().bold()
         );
     }
+    println!("{} Output Destination: {}", 
+        "[*]".green().bold(), 
+        args.output_file.yellow().bold()
+    );
     println!("{} Engine Mode: {}", 
         "[*]".green().bold(), 
         args.mode.to_uppercase().bright_magenta().bold()
     );
     println!("───────────────────────────────────────────────────────────────────────────");
 
-    // 7. Setup High-Throughput Realtime Streaming Output Writer (1MB Buffer + Low-Latency Flush)
+    // 7. Setup High-Throughput Realtime Streaming Output Writer (Immediate Flush on Hit)
     let (tx, mut rx) = mpsc::unbounded_channel::<ScanHit>();
     let out_file_path = args.output_file.clone();
     let is_json = args.json;
@@ -318,17 +339,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        let mut writer = std::io::BufWriter::with_capacity(1024 * 1024, file);
-        let mut last_flush = Instant::now();
-        let mut unwritten_count = 0u64;
+        let mut writer = std::io::BufWriter::with_capacity(64 * 1024, file);
+
+        // Dedicated real-time NLA and SSH streams if main output file is not already writing to them
+        let mut nla_stream = if out_file_path != "NLA.txt" {
+            OpenOptions::new().create(true).append(true).open("NLA.txt").ok()
+                .map(|f| std::io::BufWriter::new(f))
+        } else {
+            None
+        };
+
+        let mut ssh_stream = if out_file_path != "SSH.txt" {
+            OpenOptions::new().create(true).append(true).open("SSH.txt").ok()
+                .map(|f| std::io::BufWriter::new(f))
+        } else {
+            None
+        };
 
         while let Some(hit) = rx.recv().await {
-            // If NLA filter is active, only save targets with confirmed NLA / CredSSP capability
-            if nla_only {
-                let is_nla = crate::banner::BannerGrabber::is_nla_capable(hit.banner.as_deref());
-                if !is_nla {
-                    continue;
-                }
+            let is_nla = hit.port == 3389 && crate::banner::BannerGrabber::is_nla_capable(hit.banner.as_deref());
+            let is_ssh = hit.port == 22;
+
+            // If NLA filter is active on main output, only save targets with confirmed NLA / CredSSP capability
+            if nla_only && !is_nla {
+                continue;
             }
 
             if is_json {
@@ -348,16 +382,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let _ = writeln!(writer, "{}:{}", hit.ip, hit.port);
                 }
             }
-            unwritten_count += 1;
+            // Flush main writer immediately right after getting hit
+            let _ = writer.flush();
 
-            // Realtime streaming flush: flushes whenever queue drains or every 256 hits / 100ms
-            if unwritten_count >= 256 || last_flush.elapsed() >= Duration::from_millis(100) || rx.is_empty() {
-                let _ = writer.flush();
-                last_flush = Instant::now();
-                unwritten_count = 0;
+            // Right after getting hit: immediately write and flush to NLA.txt / SSH.txt
+            if is_nla {
+                if let Some(ref mut nw) = nla_stream {
+                    let _ = writeln!(nw, "{}:{}", hit.ip, hit.port);
+                    let _ = nw.flush();
+                }
+            } else if is_ssh {
+                if let Some(ref mut sw) = ssh_stream {
+                    let _ = writeln!(sw, "{}:{}", hit.ip, hit.port);
+                    let _ = sw.flush();
+                }
             }
         }
         let _ = writer.flush();
+        if let Some(ref mut nw) = nla_stream {
+            let _ = nw.flush();
+        }
+        if let Some(ref mut sw) = ssh_stream {
+            let _ = sw.flush();
+        }
     });
 
     let start_time = Instant::now();

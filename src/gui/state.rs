@@ -446,15 +446,27 @@ impl AppState {
                 } else {
                     None
                 };
-                let mut last_flush = Instant::now();
-                let mut unwritten_hits = 0u64;
+
+                let mut nla_stream = if output_file_path != "NLA.txt" {
+                    OpenOptions::new().create(true).append(true).open("NLA.txt").ok()
+                        .map(|f| std::io::BufWriter::new(f))
+                } else {
+                    None
+                };
+
+                let mut ssh_stream = if output_file_path != "SSH.txt" {
+                    OpenOptions::new().create(true).append(true).open("SSH.txt").ok()
+                        .map(|f| std::io::BufWriter::new(f))
+                } else {
+                    None
+                };
 
                 while let Some(hit) = tokio_rx.blocking_recv() {
-                    if nla_only {
-                        let is_nla = crate::banner::BannerGrabber::is_nla_capable(hit.banner.as_deref());
-                        if !is_nla {
-                            continue;
-                        }
+                    let is_nla = hit.port == 3389 && crate::banner::BannerGrabber::is_nla_capable(hit.banner.as_deref());
+                    let is_ssh = hit.port == 22;
+
+                    if nla_only && !is_nla {
+                        continue;
                     }
 
                     let banner_str = hit.banner.as_deref().unwrap_or("OPEN");
@@ -464,7 +476,7 @@ impl AppState {
                         text: format!("OPEN {}:{} [{}]", hit.ip, hit.port, banner_str),
                     });
 
-                    // Write to output file if configured (1MB buffered wire-speed + realtime streaming flush)
+                    // Write to output file if configured (immediate realtime streaming flush)
                     if let Some(ref mut w) = out_writer {
                         if write_jsonl {
                             let json = serde_json::json!({
@@ -483,11 +495,19 @@ impl AppState {
                                 let _ = writeln!(w, "{}:{}", hit.ip, hit.port);
                             }
                         }
-                        unwritten_hits += 1;
-                        if unwritten_hits >= 256 || last_flush.elapsed() >= Duration::from_millis(100) || tokio_rx.is_empty() {
-                            let _ = w.flush();
-                            last_flush = Instant::now();
-                            unwritten_hits = 0;
+                        let _ = w.flush();
+                    }
+
+                    // Save directly to NLA.txt / SSH.txt right after getting hit
+                    if is_nla {
+                        if let Some(ref mut nw) = nla_stream {
+                            let _ = writeln!(nw, "{}:{}", hit.ip, hit.port);
+                            let _ = nw.flush();
+                        }
+                    } else if is_ssh {
+                        if let Some(ref mut sw) = ssh_stream {
+                            let _ = writeln!(sw, "{}:{}", hit.ip, hit.port);
+                            let _ = sw.flush();
                         }
                     }
 
@@ -495,6 +515,12 @@ impl AppState {
                 }
                 if let Some(ref mut w) = out_writer {
                     let _ = w.flush();
+                }
+                if let Some(ref mut nw) = nla_stream {
+                    let _ = nw.flush();
+                }
+                if let Some(ref mut sw) = ssh_stream {
+                    let _ = sw.flush();
                 }
             });
 

@@ -231,7 +231,7 @@ impl RawSynScanner {
 
         // 1. Setup Banner Pool
         let (banner_pool, banner_worker_handle) = if self.config.grab_banner {
-            let (pool, handle) = BannerPool::spawn(128, 1800, result_tx.clone());
+            let (pool, handle) = BannerPool::spawn(1024, 1800, result_tx.clone());
             (Some(pool), Some(handle))
         } else {
             (None, None)

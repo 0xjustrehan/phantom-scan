@@ -252,8 +252,19 @@ pub fn parse_ports(port_str: &str) -> Result<Vec<u16>, String> {
                 }
             }
         } else {
-            let p: u16 = part.parse().map_err(|e| format!("Invalid port '{}': {}", part, e))?;
-            ports.push(p);
+            match part.to_ascii_lowercase().as_str() {
+                "rdp" | "nla" => ports.push(3389),
+                "ssh" => ports.push(22),
+                "http" => ports.push(80),
+                "https" => ports.push(443),
+                "smb" => ports.push(445),
+                "mysql" => ports.push(3306),
+                "redis" => ports.push(6379),
+                _ => {
+                    let p: u16 = part.parse().map_err(|e| format!("Invalid port '{}': {}", part, e))?;
+                    ports.push(p);
+                }
+            }
         }
     }
 
@@ -296,5 +307,8 @@ mod tests {
 
         let ports3 = parse_ports("1-65535").unwrap();
         assert_eq!(ports3.len(), 65535);
+
+        let ports_named = parse_ports("nla,ssh").unwrap();
+        assert_eq!(ports_named, vec![22, 3389]);
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "phantom-scan"
-version = "0.3.3"
+version = "0.3.4"
 edition = "2021"
 description = "Next-gen ultra-high-speed network scanner in Rust with Anti-AbuseIPDB and OS fingerprint evasion"
 

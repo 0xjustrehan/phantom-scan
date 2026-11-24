@@ -1,4 +1,4 @@
-# 👻 PHANTOM-SCAN v0.3.3
+# 👻 PHANTOM-SCAN v0.3.4
 
 > **Next-Generation Multi-Threaded Wire-Speed Network Scanner in Rust**  
 > *Engineered to surpass masscan in speed, with built-in Anti-AbuseIPDB, OS Fingerprint Camouflage, Linux AF_PACKET Zero-Copy (PACKET_MMAP), and Zero-Drop Dual-Stack BPF.*
@@ -91,9 +91,9 @@ phantom-scan -f subnets.txt -p rdp,ssh,web -b -r 25000 -o live_services.txt
 # 7. Output in JSON Lines with timestamps & service banners
 phantom-scan -f targets.txt -p 3389 -b --json -o results.jsonl
 
-# 8. Quick RDP NLA Scan (filters and outputs confirmed CredSSP/NLA hosts as IP:PORT)
-phantom-scan -f targets.txt --quick-nla -o nla_targets.txt
+# 8. Quick RDP NLA Scan (checks NLA/CredSSP, saves confirmed hosts to NLA.txt right on hit)
+phantom-scan -f targets.txt --quick-nla
 
-# 9. Quick SSH Scan (outputs clean IP:PORT for piping into downstream tools)
-phantom-scan -f targets.txt --quick-ssh -o ssh_targets.txt
+# 9. Quick SSH Scan (saves clean IP:PORT directly to SSH.txt right on hit)
+phantom-scan -f targets.txt --quick-ssh
 ```

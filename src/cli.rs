@@ -80,11 +80,11 @@ pub struct Cli {
     #[arg(long = "bare", aliases = ["ip-port", "clean"])]
     pub bare: bool,
 
-    /// Quick NLA scan preset: port 3389, grab banner, filter NLA/CredSSP only, save as IP:PORT
+    /// Quick NLA scan preset: port 3389, probe NLA/CredSSP, save directly to NLA.txt as IP:PORT right on hit
     #[arg(long = "quick-nla")]
     pub quick_nla: bool,
 
-    /// Quick SSH scan preset: port 22, save as IP:PORT
+    /// Quick SSH scan preset: port 22, save directly to SSH.txt as IP:PORT right on hit
     #[arg(long = "quick-ssh")]
     pub quick_ssh: bool,
 
