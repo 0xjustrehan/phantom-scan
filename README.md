@@ -5,6 +5,34 @@
 
 ---
 
+## 🖥️ Graphical User Interface (GUI) Preview & Field Guide
+
+![Phantom Scan Native Desktop GUI](assets/gui-preview.jpg)
+
+### Where to put what (GUI Walkthrough):
+
+| Section / Control | What to Put / What it Does | Example |
+| :--- | :--- | :--- |
+| **Targets** | Enter target CIDRs, IP ranges, or single IPs (one per line). Click `Load` to load a `.txt` target file. | `0.0.0.0/1`<br>`192.168.1.0/24`<br>`103.0.0.0/10` |
+| **Ports** | Enter as many ports as you want (comma-separated), ranges, or names. **Custom RDP on 443, 80, 3390?** Any port you choose is automatically probed for NLA / CredSSP! | `3389,443,80,22`<br>`80,443`<br>`1-1024` |
+| **Port Presets** | Instant buttons for common services: `3389`, `22`, `80,443`, `445`, `common`. | Click `[3389]` |
+| **⚡ Quick NLA** | **One-click RDP CredSSP scanner:** Probes for RDP, activates NLA-only filter, sets clean `IP:PORT` format, and streams hits directly into `NLA.txt`. | Click `[⚡ Quick NLA]` |
+| **⚡ Quick SSH** | **One-click SSH scanner:** Targets SSH, sets clean `IP:PORT` format, and streams hits directly into `SSH.txt`. | Click `[⚡ Quick SSH]` |
+| **Banners** | Connects to discovered open ports and grabs service headers (RDP version/NLA, SSH banner, HTTP title). | Checked (required for NLA) |
+| **Private IP** | Check to allow scanning RFC 1918 private subnets (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`). | Checked for LAN/VPC |
+| **NLA only** | **Strict Filter:** Drops honeypots and non-NLA servers, saving *only* confirmed CredSSP/NLA endpoints. | Checked |
+| **Bare IP:PORT** | Formats output strictly as clean `IP:PORT` (one per line) ready for piping into downstream tools. | Checked |
+| **Output** | Destination file for discovered hits. Saved in real time the instant each hit arrives. | `NLA.txt` or `SSH.txt` |
+| **Engine** | • `stealth-async`: Universal user-space scanner (no root/admin required).<br>• `raw-syn`: High-speed raw SYN packet injection (Requires Admin).<br>• `af-packet`: Linux zero-copy ring buffer (wire speed). | `stealth-async` (Default) |
+| **Rate (pps)** | Probe transmission rate in Packets Per Second. | `10000` to `1000000` |
+| **Threads** | Number of dedicated worker threads. | `16` (or CPU count) |
+| **Profile** | TCP stack OS camouflage signature (`Random`, `Windows`, `Linux`, `macOS`). Jitters TTL and option signatures to evade IDS/honeypots. | `Random` |
+| **Options...** | Access BGP Country Route Generator (download all CIDRs for entire countries like `KR`, `US`, `DE`), custom MACs, and exclude feeds. | Click to open modal |
+
+> 💡 **Multi-Port & Custom RDP Ports**: You can scan as many ports as you want at once (e.g. `443,22,80,3389` or `1-1024`). If you run RDP on non-standard ports (such as `443`, `80`, or `3390`), Phantom Scan automatically probes each port with RDP negotiation, detects NLA/CredSSP capabilities, and streams confirmed NLA targets straight to `NLA.txt`, while streaming SSH targets to `SSH.txt`!
+
+---
+
 ## ⚡ Feature Matrix vs Masscan
 
 | Capability | Masscan | Phantom-Scan v0.3.0 |

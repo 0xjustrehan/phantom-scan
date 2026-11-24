@@ -462,8 +462,8 @@ impl AppState {
                 };
 
                 while let Some(hit) = tokio_rx.blocking_recv() {
-                    let is_nla = hit.port == 3389 && crate::banner::BannerGrabber::is_nla_capable(hit.banner.as_deref());
-                    let is_ssh = hit.port == 22;
+                    let is_nla = crate::banner::BannerGrabber::is_nla_capable(hit.banner.as_deref());
+                    let is_ssh = hit.port == 22 || hit.banner.as_deref().map_or(false, |b| b.to_uppercase().contains("SSH"));
 
                     if nla_only && !is_nla {
                         continue;

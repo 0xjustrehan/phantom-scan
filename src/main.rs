@@ -70,7 +70,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Handle Quick Presets
     if args.quick_nla {
-        args.ports = "3389".to_string();
+        if args.ports == "3389" || args.ports.is_empty() {
+            args.ports = "3389".to_string();
+        }
         args.banner = true;
         args.nla_only = true;
         args.bare = true;
@@ -80,7 +82,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if args.quick_ssh {
-        args.ports = "22".to_string();
+        if args.ports == "3389" || args.ports.is_empty() {
+            args.ports = "22".to_string();
+        }
         args.bare = true;
         if args.output_file == "open_targets.txt" {
             args.output_file = "SSH.txt".to_string();
@@ -374,8 +378,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         while let Some(hit) = rx.recv().await {
-            let is_nla = hit.port == 3389 && crate::banner::BannerGrabber::is_nla_capable(hit.banner.as_deref());
-            let is_ssh = hit.port == 22;
+            let is_nla = crate::banner::BannerGrabber::is_nla_capable(hit.banner.as_deref());
+            let is_ssh = hit.port == 22 || hit.banner.as_deref().map_or(false, |b| b.to_uppercase().contains("SSH"));
 
             // If NLA filter is active on main output, only save targets with confirmed NLA / CredSSP capability
             if nla_only && !is_nla {

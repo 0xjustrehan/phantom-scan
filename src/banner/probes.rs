@@ -30,54 +30,64 @@ impl BannerGrabber {
         }
     }
 
+    /// Probe target for RDP protocol negotiation and detect NLA / CredSSP capabilities
+    pub async fn probe_rdp(
+        reader: &mut tokio::net::tcp::OwnedReadHalf,
+        writer: &mut tokio::net::tcp::OwnedWriteHalf,
+        timeout_dur: Duration,
+    ) -> Option<String> {
+        let rdp_cr = [
+            0x03, 0x00, 0x00, 0x13, // TPKT header (len = 19)
+            0x0e,                   // X.224 Length
+            0xe0,                   // Connection Request
+            0x00, 0x00, 0x00, 0x00, 0x00,
+            // RDP Negotiation Request (RDP_NEG_REQ)
+            0x01, 0x00, 0x08, 0x00,
+            0x0b, 0x00, 0x00, 0x00, // PROTOCOL_SSL (0x01) | PROTOCOL_HYBRID / NLA (0x02) | PROTOCOL_HYBRID_EX (0x08)
+        ];
+
+        let _ = writer.write_all(&rdp_cr).await;
+        let mut buf = [0u8; 256];
+        if let Ok(Ok(n)) = timeout(timeout_dur, reader.read(&mut buf)).await {
+            if n >= 11 && buf[0] == 0x03 {
+                if n >= 19 && buf[11] == 0x02 {
+                    let proto = u32::from_le_bytes([buf[15], buf[16], buf[17], buf[18]]);
+                    let desc = match proto {
+                        0x00 => "RDP [Standard RDP Encryption]",
+                        0x01 => "RDP [SSL/TLS]",
+                        0x02 => "RDP [NLA / CredSSP]",
+                        0x03 => "RDP [SSL + NLA / CredSSP]",
+                        0x04 => "RDP [RDSTLS]",
+                        0x08 => "RDP [NLA / CredSSP Early-Auth]",
+                        0x0b => "RDP [SSL + NLA / CredSSP]",
+                        p if (p & 0x02) != 0 || (p & 0x08) != 0 => "RDP [NLA / CredSSP]",
+                        _ => "RDP",
+                    };
+                    return Some(desc.to_string());
+                }
+                if n >= 19 && buf[11] == 0x03 {
+                    let fail_code = u32::from_le_bytes([buf[15], buf[16], buf[17], buf[18]]);
+                    if fail_code == 0x05 {
+                        return Some("RDP [NLA / CredSSP Required by Server]".to_string());
+                    } else if fail_code == 0x01 {
+                        return Some("RDP [SSL Required by Server]".to_string());
+                    }
+                }
+                return Some("RDP [Standard]".to_string());
+            }
+        }
+        None
+    }
+
     pub async fn grab_banner(target: SocketAddr, timeout_dur: Duration) -> Option<String> {
         let stream = timeout(timeout_dur, TcpStream::connect(target)).await.ok()?.ok()?;
         let (mut reader, mut writer) = stream.into_split();
 
         match target.port() {
-            // ── Port 3389: RDP ────────────────────────────────────────────────
-            3389 => {
-                let rdp_cr = [
-                    0x03, 0x00, 0x00, 0x13, // TPKT header (len = 19)
-                    0x0e,                   // X.224 Length
-                    0xe0,                   // Connection Request
-                    0x00, 0x00, 0x00, 0x00, 0x00,
-                    // RDP Negotiation Request (RDP_NEG_REQ)
-                    0x01, 0x00, 0x08, 0x00,
-                    0x0b, 0x00, 0x00, 0x00, // PROTOCOL_SSL (0x01) | PROTOCOL_HYBRID / NLA (0x02) | PROTOCOL_HYBRID_EX (0x08)
-                ];
-
-                let _ = writer.write_all(&rdp_cr).await;
-                let mut buf = [0u8; 256];
-                if let Ok(Ok(n)) = timeout(timeout_dur, reader.read(&mut buf)).await {
-                    if n >= 11 && buf[0] == 0x03 {
-                        if n >= 19 && buf[11] == 0x02 {
-                            let proto = u32::from_le_bytes([buf[15], buf[16], buf[17], buf[18]]);
-                            let desc = match proto {
-                                0x00 => "RDP [Standard RDP Encryption]",
-                                0x01 => "RDP [SSL/TLS]",
-                                0x02 => "RDP [NLA / CredSSP]",
-                                0x03 => "RDP [SSL + NLA / CredSSP]",
-                                0x04 => "RDP [RDSTLS]",
-                                0x08 => "RDP [NLA / CredSSP Early-Auth]",
-                                0x0b => "RDP [SSL + NLA / CredSSP]",
-                                p if (p & 0x02) != 0 || (p & 0x08) != 0 => "RDP [NLA / CredSSP]",
-                                _ => "RDP",
-                            };
-                            return Some(desc.to_string());
-                        }
-                        if n >= 19 && buf[11] == 0x03 {
-                            let fail_code = u32::from_le_bytes([buf[15], buf[16], buf[17], buf[18]]);
-                            if fail_code == 0x05 {
-                                return Some("RDP [NLA / CredSSP Required by Server]".to_string());
-                            } else if fail_code == 0x01 {
-                                return Some("RDP [SSL Required by Server]".to_string());
-                            }
-                        }
-                        return Some("RDP [Standard]".to_string());
-                    }
-                }
-                Some("RDP".to_string())
+            // ── Standard & Alternate RDP Ports ────────────────────────────────
+            3389 | 3388..=3399 => {
+                Self::probe_rdp(&mut reader, &mut writer, timeout_dur).await
+                    .or_else(|| Some("RDP".to_string()))
             }
 
             // ── Port 445: SMB ─────────────────────────────────────────────────
@@ -137,8 +147,13 @@ impl BannerGrabber {
                 Some("SSH".to_string())
             }
 
-            // ── Port 80, 8080, 8000, 8888, 443, 8443: HTTP ───────────────────
+            // ── Port 80, 8080, 8000, 8888, 443, 8443: HTTP / Custom RDP ──────
             80 | 8080 | 8000 | 8888 | 443 | 8443 => {
+                // First check if target is running RDP on 443/80/8080
+                if let Some(rdp_res) = Self::probe_rdp(&mut reader, &mut writer, timeout_dur.min(Duration::from_millis(500))).await {
+                    return Some(rdp_res);
+                }
+
                 let http_req = format!(
                     "GET / HTTP/1.1\r\nHost: {}\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)\r\nConnection: close\r\n\r\n",
                     target.ip()
@@ -275,8 +290,13 @@ impl BannerGrabber {
                 Some("VNC".to_string())
             }
 
-            // ── Generic Banner ────────────────────────────────────────────────
+            // ── Generic Banner & Custom Ports (Auto-Probe RDP) ───────────────
             _ => {
+                // First test for RDP on any custom port (e.g. 3390, 8443, etc.)
+                if let Some(rdp_res) = Self::probe_rdp(&mut reader, &mut writer, timeout_dur.min(Duration::from_millis(500))).await {
+                    return Some(rdp_res);
+                }
+
                 let _ = writer.write_all(b"\r\n\r\n").await;
                 let mut buf = [0u8; 256];
                 if let Ok(Ok(n)) = timeout(Duration::from_millis(700), reader.read(&mut buf)).await {

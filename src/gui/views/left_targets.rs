@@ -131,8 +131,8 @@ impl LeftTargetsView {
 
             // Checkboxes
             ui.horizontal(|ui| {
-                ui.checkbox(&mut state.config.scan_private, "Private ranges");
-                ui.checkbox(&mut state.config.banner, "Grab banners");
+                ui.checkbox(&mut state.config.banner, "Banners");
+                ui.checkbox(&mut state.config.scan_private, "Private IP");
             });
             ui.horizontal(|ui| {
                 if ui.checkbox(&mut state.config.nla_only, "NLA only").changed() && state.config.nla_only {
